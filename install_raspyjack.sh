@@ -484,7 +484,7 @@ fi
 
 # 8 ▸ download Ragnar payload images
 step "Downloading Ragnar payload sprite images... "
-RAGNAR_IMAGES_DIR="/root/Raspyjack/payloads/reconnaissance/images"
+RAGNAR_IMAGES_DIR="/root/Raspyjack/loot/Ragnar/images"
 if [ -d "$RAGNAR_IMAGES_DIR" ]; then
     mkdir -p "$RAGNAR_IMAGES_DIR/IDLE" "$RAGNAR_IMAGES_DIR/NetworkScanner"
     

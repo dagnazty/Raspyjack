@@ -102,25 +102,54 @@ def load_images():
         from PIL import Image
         import os
         
+        # Look in loot folder first, then fall back to images folder
+        possible_dirs = [
+            "/root/Raspyjack/loot/Ragnar/images",
+            IMAGES_DIR,
+        ]
+        
+        def process_image(fpath):
+            """Load image and make white background transparent."""
+            img = Image.open(fpath)
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            # Make white (#FFFFFF) transparent
+            data = img.getdata()
+            new_data = []
+            for item in data:
+                # If pixel is close to white, make it transparent
+                if item[0] > 200 and item[1] > 200 and item[2] > 200:
+                    new_data.append((0, 0, 0, 0))  # Transparent
+                else:
+                    new_data.append(item)
+            img.putdata(new_data)
+            return img
+        
         # Load IDLE frames
-        idle_dir = os.path.join(IMAGES_DIR, "IDLE")
-        if os.path.isdir(idle_dir):
-            for i in range(10):  # Try IDLE.bmp, IDLE1.bmp, etc.
-                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                    fname = f"IDLE{ext}.bmp" if ext else "IDLE.bmp"
-                    fpath = os.path.join(idle_dir, fname)
-                    if os.path.exists(fpath):
-                        IDLE_FRAMES.append(Image.open(fpath))
+        for img_dir in possible_dirs:
+            idle_dir = os.path.join(img_dir, "IDLE")
+            if os.path.isdir(idle_dir):
+                for i in range(10):
+                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                        fname = f"IDLE{ext}.bmp" if ext else "IDLE.bmp"
+                        fpath = os.path.join(idle_dir, fname)
+                        if os.path.exists(fpath):
+                            IDLE_FRAMES.append(process_image(fpath))
+                if IDLE_FRAMES:
+                    break
         
         # Load NetworkScanner frames (for scanning)
-        scan_dir = os.path.join(IMAGES_DIR, "NetworkScanner")
-        if os.path.isdir(scan_dir):
-            for i in range(10):
-                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                    fname = f"NetworkScanner{ext}.bmp" if ext else "NetworkScanner.bmp"
-                    fpath = os.path.join(scan_dir, fname)
-                    if os.path.exists(fpath):
-                        SCAN_FRAMES.append(Image.open(fpath))
+        for img_dir in possible_dirs:
+            scan_dir = os.path.join(img_dir, "NetworkScanner")
+            if os.path.isdir(scan_dir):
+                for i in range(10):
+                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                        fname = f"NetworkScanner{ext}.bmp" if ext else "NetworkScanner.bmp"
+                        fpath = os.path.join(scan_dir, fname)
+                        if os.path.exists(fpath):
+                            SCAN_FRAMES.append(process_image(fpath))
+                if SCAN_FRAMES:
+                    break
         
         print(f"[INFO] Loaded {len(IDLE_FRAMES)} IDLE frames, {len(SCAN_FRAMES)} SCAN frames")
     except Exception as e:

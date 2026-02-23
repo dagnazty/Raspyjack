@@ -1,11 +1,14 @@
 #!/bin/bash
 # Download Ragnar sprite images for the payload
-# Run this from the payloads/reconnaissance directory
+# Run this from anywhere - images go to loot/Ragnar/images
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Default to loot folder
+SCRIPT_DIR="${1:-/root/Raspyjack/loot/Ragnar}"
 IMAGES_DIR="$SCRIPT_DIR/images"
+
+echo "Downloading Ragnar sprite images to $IMAGES_DIR..."
 
 echo "Downloading Ragnar sprite images..."
 
