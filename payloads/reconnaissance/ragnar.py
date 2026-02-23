@@ -38,7 +38,16 @@ import ipaddress
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(__file__, "..", "..")))
+# Try multiple possible RaspyJack installation paths
+possible_roots = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),  # Standard: ~/Raspyjack
+    "/root/Raspyjack",
+    "/home/pi/Raspyjack",
+    "/opt/Raspyjack",
+]
+for root in possible_roots:
+    if root not in sys.path and os.path.isdir(root):
+        sys.path.insert(0, root)
 
 import RPi.GPIO as GPIO
 import LCD_1in44, LCD_Config
@@ -74,6 +83,74 @@ YELLOW = "#FFFF00"
 CYAN = "#00FFFF"
 WHITE = "#FFFFFF"
 BLACK = "#000000"
+GRAY = "#808080"
+
+# Animation frames
+SPINNER_FRAMES = ["|", "/", "-", "\\"]
+PULSE_FRAMES = ["*", "+", "•", "+"]
+
+# Image paths for Ragnar sprites
+IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
+IDLE_FRAMES = []  # Will be loaded from images
+SCAN_FRAMES = []  # Will be loaded from images
+
+def load_images():
+    """Load Ragnar sprite images if available."""
+    global IDLE_FRAMES, SCAN_FRAMES
+    
+    try:
+        from PIL import Image
+        import os
+        
+        # Load IDLE frames
+        idle_dir = os.path.join(IMAGES_DIR, "IDLE")
+        if os.path.isdir(idle_dir):
+            for i in range(10):  # Try IDLE.bmp, IDLE1.bmp, etc.
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"IDLE{ext}.bmp" if ext else "IDLE.bmp"
+                    fpath = os.path.join(idle_dir, fname)
+                    if os.path.exists(fpath):
+                        IDLE_FRAMES.append(Image.open(fpath))
+        
+        # Load NetworkScanner frames (for scanning)
+        scan_dir = os.path.join(IMAGES_DIR, "NetworkScanner")
+        if os.path.isdir(scan_dir):
+            for i in range(10):
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"NetworkScanner{ext}.bmp" if ext else "NetworkScanner.bmp"
+                    fpath = os.path.join(scan_dir, fname)
+                    if os.path.exists(fpath):
+                        SCAN_FRAMES.append(Image.open(fpath))
+        
+        print(f"[INFO] Loaded {len(IDLE_FRAMES)} IDLE frames, {len(SCAN_FRAMES)} SCAN frames")
+    except Exception as e:
+        print(f"[WARN] Could not load images: {e}")
+
+# Try to load images on import
+load_images()
+
+# Fallback Viking sprite if images not available
+VIKING_SPRITE = [
+    "  ████  ",
+    " ██──██ ",
+    "████████",
+    "████████",
+    " ██▓▓██ ",
+    "  ████  ",
+    "   ██   ",
+    "  █  █  ",
+]
+
+def draw_viking_fallback(x, y, size=4, color=GREEN, frame=0):
+    """Draw a simple Viking warrior sprite as fallback."""
+    anim_offset = [0, 1, 0, -1][frame % 4]
+    for row_idx, row in enumerate(VIKING_SPRITE):
+        for col_idx, pixel in enumerate(row):
+            if pixel in "█▓":
+                px = x + (col_idx * size) + (anim_offset if row_idx == 7 else 0)
+                py = y + (row_idx * size)
+                fill = color if pixel == "█" else YELLOW
+                draw.rectangle((px, py, px + size - 1, py + size - 1), fill=fill)
 
 # ---------------------------------------------------------------------------
 # Global State
@@ -88,9 +165,11 @@ state = {
     "vulns": [],
     "loot": [],
     "scan_start": None,
+    "scan_progress": 0,  # 0-100 percentage
     "current_target": "",
     "last_scan_time": None,
     "network": "192.168.1.0/24",
+    "frame_index": 0,  # For animations
 }
 
 # ---------------------------------------------------------------------------
@@ -278,23 +357,32 @@ def full_scan():
     """Run complete network scan."""
     state["scanning"] = True
     state["scan_start"] = datetime.now()
+    state["scan_progress"] = 0
     
     # Update network
     state["network"] = get_local_network()
+    state["current_target"] = "Discovering hosts..."
     
     # Discover hosts
     discover_hosts()
+    state["scan_progress"] = 20
     
     # Scan each host
-    for host in state["hosts"]:
+    total_hosts = len(state["hosts"])
+    for i, host in enumerate(state["hosts"]):
         if not state["scanning"]:
             break
+        state["current_target"] = f"Scanning {host['ip']}..."
+        state["scan_progress"] = 20 + int((i / max(total_hosts, 1)) * 80)
         scan_host(host["ip"])
+    
+    state["scan_progress"] = 100
     
     # Save results
     save_loot()
     
     state["scanning"] = False
+    state["scan_progress"] = 0
     state["last_scan_time"] = datetime.now()
     state["current_target"] = "Scan complete"
 
@@ -306,45 +394,42 @@ def scan_worker():
 # ---------------------------------------------------------------------------
 # Display Functions
 # ---------------------------------------------------------------------------
-def show(lines, invert=False, spacing=2):
-    """Render lines to LCD."""
-    if isinstance(lines, str):
-        lines = lines.split("\n")
-    
-    draw.rectangle((0, 0, W, H), fill="white" if invert else BLACK)
-    fg = BLACK if invert else GREEN
-    
-    y = 2
-    for line in lines:
-        draw.text((2, y), line, font=font_small, fill=fg)
-        y += 8 + spacing
-    
-    canvas = Image.new("RGB", (W, H), "white" if invert else BLACK)
-    draw = ImageDraw.Draw(canvas)
-    y = 2
-    for line in lines:
-        draw.text((2, y), line, font=font_small, fill=fg)
-        y += 8 + spacing
-    
+def clear_screen():
+    """Clear the LCD screen."""
+    draw.rectangle((0, 0, W, H), fill=BLACK)
     LCD.LCD_ShowImage(canvas, 0, 0)
-
-def draw_status_bar(title):
-    """Draw the status bar at top."""
-    draw.rectangle((0, 0, W, 12), fill=CYAN)
-    draw.text((2, 2), title[:18], font=font_tiny, fill=BLACK)
 
 def draw_view_scan():
     """Draw the SCAN view."""
+    # Clear screen
     draw.rectangle((0, 0, W, H), fill=BLACK)
     
     # Status bar
     draw.rectangle((0, 0, W, 12), fill=CYAN)
     draw.text((2, 2), "RAGNAR SCAN", font=font_tiny, fill=BLACK)
     
-    # Status indicator
-    status = "SCANNING" if state["scanning"] else "IDLE"
-    color = RED if state["scanning"] else GREEN
-    draw.text((W - 50, 2), status, font=font_tiny, fill=color)
+    # Status indicator with spinner animation
+    if state["scanning"]:
+        spinner = SPINNER_FRAMES[state["frame_index"] % len(SPINNER_FRAMES)]
+        draw.text((W - 55, 2), f"{spinner}", font=font_tiny, fill=RED)
+        draw.text((W - 30, 2), "SCAN", font=font_tiny, fill=RED)
+    else:
+        draw.text((W - 30, 2), "IDLE", font=font_tiny, fill=GREEN)
+    
+    # Draw Ragnar sprite (use loaded images if available, otherwise fallback)
+    frames = SCAN_FRAMES if state["scanning"] else IDLE_FRAMES
+    if frames:
+        # Use loaded image frames
+        frame_idx = state["frame_index"] % len(frames)
+        frame_img = frames[frame_idx]
+        # Resize to fit (target is ~32x32 area)
+        frame_img = frame_img.resize((32, 32), Image.LANCZOS)
+        # Paste at position
+        canvas.paste(frame_img, (W - 36, 12), frame_img if frame_img.mode == 'RGBA' else None)
+    else:
+        # Fallback: draw simple sprite
+        viking_color = RED if state["scanning"] else GREEN
+        draw_viking_fallback(W - 45, 14, size=3, color=viking_color, frame=state["frame_index"])
     
     # Network
     draw.text((2, 16), f"Net: {state['network'][:18]}", font=font_tiny, fill=WHITE)
@@ -357,12 +442,25 @@ def draw_view_scan():
     y += 10
     draw.text((2, y), f"Loot: {len(state['loot'])}", font=font_small, fill=CYAN)
     
-    # Current target
+    # Current target with pulse animation when scanning
     y = 60
     draw.text((2, y), "Target:", font=font_tiny, fill=GRAY)
     y += 8
     target = state["current_target"][:20] if state["current_target"] else "None"
-    draw.text((2, y), target, font=font_tiny, fill=WHITE)
+    if state["scanning"]:
+        # Pulse effect on target
+        pulse = PULSE_FRAMES[state["frame_index"] % len(PULSE_FRAMES)]
+        draw.text((2, y), f"{pulse} {target}", font=font_tiny, fill=WHITE)
+    else:
+        draw.text((2, y), target, font=font_tiny, fill=WHITE)
+    
+    # Progress bar when scanning
+    if state["scanning"] and state["scan_progress"] > 0:
+        progress = state["scan_progress"] / 100.0
+        bar_width = int((W - 4) * progress)
+        draw.rectangle((2, H - 20, W - 2, H - 15), outline=GRAY)
+        draw.rectangle((3, H - 19, 3 + bar_width, H - 16), fill=GREEN)
+        draw.text((2, H - 14), f"{state['scan_progress']}%", font=font_tiny, fill=GRAY)
     
     # Auto-scan status
     if state["auto_scan"]:
@@ -449,6 +547,8 @@ def draw_view_loot():
 
 def render():
     """Render current view."""
+    # Update animation frame on each render
+    state["frame_index"] += 1
     views = [draw_view_scan, draw_view_hosts, draw_view_vulns, draw_view_loot]
     views[state["current_view"]]()
 
@@ -481,7 +581,20 @@ def main():
     render()
     
     while True:
-        button = get_button(timeout_ms=200)
+        button = get_button(PINS, GPIO)
+        
+        # Re-render during scan to show progress
+        if state["scanning"]:
+            render()
+            time.sleep(0.3)
+        
+        if button is None:
+            continue
+        
+        # Debounce: wait for button release
+        while get_button(PINS, GPIO) is not None:
+            time.sleep(0.05)
+        time.sleep(0.1)  # Extra debounce delay
         
         if button == "KEY3":
             # Exit
@@ -531,11 +644,6 @@ def main():
             if state["scroll_offset"] < max_items:
                 state["scroll_offset"] += 1
             render()
-        
-        # Re-render during scan to show progress
-        if state["scanning"]:
-            render()
-            time.sleep(0.5)
     
     # Cleanup
     auto_scan_running = False

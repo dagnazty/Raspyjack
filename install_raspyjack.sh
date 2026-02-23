@@ -482,6 +482,37 @@ if [ -d "/root/Raspyjack/bin" ]; then
     info "Permissions set for files in /root/Raspyjack/bin/"
 fi
 
+# 8 ▸ download Ragnar payload images
+step "Downloading Ragnar payload sprite images... "
+RAGNAR_IMAGES_DIR="/root/Raspyjack/payloads/reconnaissance/images"
+if [ -d "$RAGNAR_IMAGES_DIR" ]; then
+    mkdir -p "$RAGNAR_IMAGES_DIR/IDLE" "$RAGNAR_IMAGES_DIR/NetworkScanner"
+    
+    # Download IDLE frames
+    for i in 0 1 2 3 4; do
+        if [ $i -eq 0 ]; then
+            SUFFIX=""
+        else
+            SUFFIX="$i"
+        fi
+        curl -sL "https://raw.githubusercontent.com/PierreGode/Ragnar/main/resources/images/status/IDLE/IDLE${SUFFIX}.bmp" -o "$RAGNAR_IMAGES_DIR/IDLE/IDLE${SUFFIX}.bmp" || true
+    done
+    
+    # Download NetworkScanner frames
+    for i in 0 1 2 3 4; do
+        if [ $i -eq 0 ]; then
+            SUFFIX=""
+        else
+            SUFFIX="$i"
+        fi
+        curl -sL "https://raw.githubusercontent.com/PierreGode/Ragnar/main/resources/images/status/NetworkScanner/NetworkScanner${SUFFIX}.bmp" -o "$RAGNAR_IMAGES_DIR/NetworkScanner/NetworkScanner${SUFFIX}.bmp" || true
+    done
+    
+    info "Downloaded Ragnar sprite images"
+else
+    info "Ragnar payload not found, skipping image download"
+fi
+
 step "Installation finished successfully!"
 info "⚠️  Reboot is recommended to ensure overlays & services start cleanly."
 info "📡 For WiFi attacks: Plug in USB WiFi dongle and run payloads/interception/deauth.py"
