@@ -502,7 +502,7 @@
   const pressed = new Set(); // keyboard pressed state
   let activeTab = 'device';
   let lootState = { path: '', parent: '' };
-  let payloadState = { categories: [], open: {}, activePath: null };
+  let payloadState = { tree: null, expanded: new Set(), activePath: null };
   let term = null;
   let fitAddon = null;
   let shellOpen = false;
@@ -1258,18 +1258,14 @@
   async function loadPayloads(){
     setPayloadStatus('Loading...');
     try{
-      const url = getApiUrl('/api/payloads/list');
+      const url = getApiUrl('/api/payloads/tree');
       const res = await apiFetch(url, { cache: 'no-store' });
       const data = await res.json();
-      if (!res.ok){
-        throw new Error(data && data.error ? data.error : 'payloads_failed');
+      if (!res.ok || data.error){
+        throw new Error(data.error || 'payloads_failed');
       }
-      payloadState.categories = data.categories || [];
-      payloadState.categories.forEach((cat, idx) => {
-        if (payloadState.open[cat.id] === undefined) {
-          payloadState.open[cat.id] = idx === 0;
-        }
-      });
+      payloadState.tree = data;
+      payloadState.expanded = payloadState.expanded || new Set();
       renderPayloadSidebar();
       setPayloadStatus('Ready');
     }catch(e){
@@ -1280,50 +1276,87 @@
 
   function renderPayloadSidebar(){
     if (!payloadSidebar) return;
-    const cats = payloadState.categories || [];
-    if (!cats.length){
-      payloadSidebar.innerHTML = '<div class="text-xs text-slate-500 px-2">No categories.</div>';
+    const tree = payloadState.tree;
+    if (!tree || !tree.children){
+      payloadSidebar.innerHTML = '<div class="text-xs text-slate-500 px-2">No payloads available.</div>';
       return;
     }
-    payloadSidebar.innerHTML = cats.map(cat => {
-      const catId = String(cat?.id || '');
-      const catIdEncoded = encodeData(catId);
-      const catLabel = escapeHtml(String(cat?.label || catId || 'Category'));
-      const isOpen = !!payloadState.open[catId];
-      const items = (cat.items || []).map(item => {
-        const itemName = escapeHtml(String(item?.name || 'payload'));
-        const itemPath = String(item?.path || '');
-        const itemPathEncoded = encodeData(itemPath);
-        const isActive = payloadState.activePath === itemPath;
-        const disabled = !!payloadState.activePath;
-        const startCls = disabled
-          ? 'px-2 py-0.5 text-[10px] rounded-md bg-slate-800/80 border border-slate-700/40 text-slate-500 cursor-not-allowed'
-          : 'px-2 py-0.5 text-[10px] rounded-md bg-emerald-600/80 border border-emerald-300/30 text-white hover:bg-emerald-500/80 transition';
-        const stopBtn = isActive
-          ? '<button type="button" data-stop="1" class="px-2 py-0.5 text-[10px] rounded-md bg-rose-600/80 border border-rose-300/30 text-white hover:bg-rose-500/80 transition">Stop</button>'
-          : '<span class="px-2 py-0.5 text-[10px] rounded-md bg-slate-900/60 border border-slate-800/40 text-slate-600">Idle</span>';
-        return `
+
+    // Category order for sorting
+    const catOrder = ['reconnaissance', 'interception', 'evil_portal', 'exfiltration', 'remote_access', 'general', 'examples', 'games', 'virtual_pager', 'incident_response', 'known_unstable', 'prank'];
+    const catOrderIdx = (cat) => {
+      const idx = catOrder.indexOf(cat.name);
+      return idx >= 0 ? idx : 999;
+    };
+
+    // Sort children: categories first (in order), then other dirs, then files
+    const sortedChildren = [...(tree.children || [])].sort((a, b) => {
+      const aIsDir = a.type === 'dir';
+      const bIsDir = b.type === 'dir';
+      if (aIsDir !== bIsDir) return bIsDir - aIsDir;
+      return catOrderIdx(a) - catOrderIdx(b);
+    });
+
+    payloadSidebar.innerHTML = sortedChildren.map(node => renderTreeNode(node, 0)).join('');
+
+    // Add click handlers for category toggles
+    sortedChildren.forEach(node => {
+      if (node.type === 'dir'){
+        const btn = payloadSidebar.querySelector(`[data-cat="${encodeData(node.path)}"]`);
+        if (btn){
+          btn.addEventListener('click', () => {
+            if (payloadState.expanded.has(node.path)){
+              payloadState.expanded.delete(node.path);
+            } else {
+              payloadState.expanded.add(node.path);
+            }
+            renderPayloadSidebar();
+          });
+        }
+      }
+    });
+  }
+
+  function renderTreeNode(node, depth){
+    const isDir = node.type === 'dir';
+    const path = node.path || '';
+    const name = escapeHtml(node.name);
+    const isExpanded = payloadState.expanded.has(path);
+    const isActive = payloadState.activePath === path;
+
+    if (isDir){
+      // Category/folder
+      const childrenHtml = isExpanded && node.children ? node.children.map(child => renderTreeNode(child, depth + 1)).join('') : '';
+      return `
+        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40">
+          <button type="button" data-cat="${encodeData(path)}" class="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 flex items-center justify-between">
+            <span>${name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+            <span class="text-slate-400">${isExpanded ? '▾' : '▸'}</span>
+          </button>
+          <div class="${isExpanded ? '' : 'hidden'} px-2 pb-2 space-y-1 pl-2">
+            ${childrenHtml || '<div class="text-[11px] text-slate-500 px-1">Empty</div>'}
+          </div>
+        </div>
+      `;
+    } else {
+      //ayload
+      const disabled = !!payloadState.activePath;
+      const startCls = disabled
+        ? 'px-2 py-0.5 text-[10px] rounded-md bg-slate-800/80 border border-slate-700/40 text-slate-500 cursor-not-allowed'
+        : 'px-2 py-0.5 text-[10px] rounded-md bg-emerald-600/80 border border-emerald-300/30 text-white hover:bg-emerald-500/80 transition';
+      const stopBtn = isActive
+        ? '<button type="button" data-stop="1" class="px-2 py-0.5 text-[10px] rounded-md bg-rose-600/80 border border-rose-300/30 text-white hover:bg-rose-500/80 transition">Stop</button>'
+        : '<span class="px-2 py-0.5 text-[10px] rounded-md bg-slate-900/60 border border-slate-800/40 text-slate-600">Idle</span>';
+      return `
         <div class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-slate-900/40 border border-slate-800/70">
-          <div class="text-[11px] text-slate-200 truncate">${itemName}</div>
+          <div class="text-[11px] text-slate-200 truncate">${name}</div>
           <div class="flex items-center gap-1">
-            <button type="button" data-start="${itemPathEncoded}" ${disabled ? 'disabled' : ''} class="${startCls}">Start</button>
+            <button type="button" data-start="${encodeData(path)}" ${disabled ? 'disabled' : ''} class="${startCls}">Start</button>
             ${stopBtn}
           </div>
         </div>
       `;
-      }).join('');
-      return `
-        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40">
-          <button type="button" data-cat="${catIdEncoded}" class="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 flex items-center justify-between">
-            <span>${catLabel}</span>
-            <span class="text-slate-400">${isOpen ? '▾' : '▸'}</span>
-          </button>
-          <div class="${isOpen ? '' : 'hidden'} px-2 pb-2 space-y-1">
-            ${items || '<div class="text-[11px] text-slate-500 px-1">Empty</div>'}
-          </div>
-        </div>
-      `;
-    }).join('');
+    }
   }
 
   async function startPayload(path){
@@ -1498,7 +1531,11 @@
       const encodedId = catBtn.getAttribute('data-cat') || '';
       const id = decodeURIComponent(encodedId);
       if (id){
-        payloadState.open[id] = !payloadState.open[id];
+        if (payloadState.expanded.has(id)){
+          payloadState.expanded.delete(id);
+        } else {
+          payloadState.expanded.add(id);
+        }
         renderPayloadSidebar();
       }
       return;

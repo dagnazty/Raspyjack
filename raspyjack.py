@@ -2215,11 +2215,17 @@ def list_payloads_by_category():
     """
     Return payloads grouped by category folder.
     - Files in payload_path root go to "general".
+    - Subdirectory files show with subdir prefix.
     """
     categories: dict[str, list[str]] = {}
     for rel_path in list_payloads():
         parts = rel_path.split(os.sep)
-        if len(parts) > 1:
+        if len(parts) == 3:
+            # e.g., reconnaissance/ragnar/main.py -> category = "reconnaissance", name = "ragnar/main"
+            category = parts[0]
+            display_name = f"{parts[1]}/{parts[2].replace('.py', '')}"
+            rel_path = f"{category}/{display_name}"
+        elif len(parts) > 1:
             category = parts[0]
         else:
             category = "general"
@@ -2280,6 +2286,9 @@ def exec_payload(filename: str) -> None:
     3. Whatever happens, re-initialise GPIO + LCD and redraw the menu.
     """
     full = os.path.join(default.payload_path, filename)
+    # Ensure .py extension
+    if not full.endswith(".py"):
+        full += ".py"
     if not os.path.isfile(full):
         print(f"[PAYLOAD] ✗ File not found: {full}")
         return                                       # nothing to launch
@@ -2467,7 +2476,7 @@ class DisposableMenu:
         return -1
     # Génération à chaud du sous-menu Payload -------------------------------
     def _build_payload_menu(self):
-        """Crée (ou rafraîchit) le menu 'ap' par catégories."""
+        """Crée (ou rafraîchit) le menu 'ap' par catégories avec sous-dossiers."""
         category_order = [
             "reconnaissance",
             "interception",
@@ -2481,7 +2490,6 @@ class DisposableMenu:
             "incident_response",
             "known_unstable",
             "prank",
-            "ragnar",
         ]
 
         def _label(cat: str) -> str:
@@ -2494,24 +2502,83 @@ class DisposableMenu:
             scripts = categories.get(cat, [])
             if not scripts:
                 continue
-            key = f"ap_{cat}"
-            self.menu[key] = tuple(
-                [f" {os.path.splitext(os.path.basename(path))[0]}", partial(exec_payload, path)]
-                for path in scripts
-            )
-            menu_items.append([_label(cat), key])
+
+            # Separate root-level files from subdirectory files
+            root_files = []
+            subdirs = {}
+            for path in scripts:
+                parts = path.split('/')
+                # len > 2 means actual subdirectory (e.g., reconnaissance/ragnar/main.py)
+                if len(parts) > 2 and parts[0] == cat:
+                    subdir = parts[1]
+                    if subdir not in subdirs:
+                        subdirs[subdir] = []
+                    subdirs[subdir].append(path)
+                else:
+                    # Root-level file (in category root or general)
+                    root_files.append(path)
+
+            # Build category menu - root files listed directly, subdirs as folders
+            cat_items = []
+
+            # Add root files directly to category menu
+            for p in root_files:
+                cat_items.append([f" {os.path.splitext(os.path.basename(p))[0]}", partial(exec_payload, p)])
+
+            # Add subdirectories as expandable folders
+            for subdir in sorted(subdirs.keys()):
+                subdir_paths = subdirs[subdir]
+                subkey = f"ap_{cat}_{subdir}"
+                self.menu[subkey] = tuple(
+                    [f" {os.path.splitext(os.path.basename(p))[0]}", partial(exec_payload, p)]
+                    for p in subdir_paths
+                )
+                cat_items.append([f" 📁 {subdir}", subkey])
+
+            # Only create category menu if there are items
+            if cat_items:
+                key = f"ap_{cat}"
+                self.menu[key] = tuple(cat_items)
+                menu_items.append([_label(cat), key])
 
         # Add any unexpected categories at the end
         for cat in sorted(categories.keys()):
             if cat in category_order:
                 continue
             scripts = categories[cat]
-            key = f"ap_{cat}"
-            self.menu[key] = tuple(
-                [f" {os.path.splitext(os.path.basename(path))[0]}", partial(exec_payload, path)]
-                for path in scripts
-            )
-            menu_items.append([_label(cat), key])
+
+            root_files = []
+            subdirs = {}
+            for path in scripts:
+                parts = path.split('/')
+                if len(parts) > 2:
+                    subdir = parts[0]
+                    if subdir not in subdirs:
+                        subdirs[subdir] = []
+                    subdirs[subdir].append(path)
+                else:
+                    root_files.append(path)
+
+            cat_items = []
+
+            # Add root files directly
+            for p in root_files:
+                cat_items.append([f" {os.path.splitext(os.path.basename(p))[0]}", partial(exec_payload, p)])
+
+            # Add subdirectories as folders
+            for subdir in sorted(subdirs.keys()):
+                subdir_paths = subdirs[subdir]
+                subkey = f"ap_{cat}_{subdir}"
+                self.menu[subkey] = tuple(
+                    [f" {os.path.splitext(os.path.basename(p))[0]}", partial(exec_payload, p)]
+                    for p in subdir_paths
+                )
+                cat_items.append([f" 📁 {subdir}", subkey])
+
+            if cat_items:
+                key = f"ap_{cat}"
+                self.menu[key] = tuple(cat_items)
+                menu_items.append([_label(cat), key])
 
         self.menu["ap"] = tuple(menu_items) or ([" <vide>", lambda: None],)
 

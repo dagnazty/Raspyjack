@@ -9,6 +9,9 @@
 # ------------------------------------------------------------
 set -euo pipefail
 
+# Determine script directory for local file references
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ───── helpers ───────────────────────────────────────────────
 step()  { printf "\e[1;34m[STEP]\e[0m %s\n"  "$*"; }
 info()  { printf "\e[1;32m[INFO]\e[0m %s\n"  "$*"; }
@@ -484,8 +487,9 @@ fi
 
 # 8 ▸ download Ragnar payload images
 step "Downloading Ragnar payload sprite images... "
+RAGNAR_SOURCE_DIR="$SCRIPT_DIR/payloads/reconnaissance/ragnar"
 RAGNAR_IMAGES_DIR="/root/Raspyjack/loot/Ragnar/images"
-if [ -d "$RAGNAR_IMAGES_DIR" ]; then
+if [ -d "$RAGNAR_SOURCE_DIR" ]; then
     # List of all animation folders
     ANIMATIONS="IDLE NetworkScanner NmapVulnScanner FTPBruteforce SSHBruteforce SMBBruteforce RDPBruteforce SQLBruteforce StealDataSQL LogStandalone LogStandalone2"
     

@@ -1030,8 +1030,13 @@ class RaspyJackHandler(SimpleHTTPRequestHandler):
                 if not name.endswith(".py") or name.startswith("_"):
                     continue
                 rel_path = os.path.join(rel_dir, name) if rel_dir != "." else name
+                # Include subdirectory in name for nested payloads
+                if rel_dir != "." and rel_dir != category:
+                    display_name = f"{rel_dir}/{os.path.splitext(name)[0]}"
+                else:
+                    display_name = os.path.splitext(name)[0]
                 categories.setdefault(category, []).append({
-                    "name": os.path.splitext(name)[0],
+                    "name": display_name,
                     "path": rel_path.replace("\\", "/"),
                 })
 
