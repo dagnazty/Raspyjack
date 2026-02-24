@@ -552,9 +552,12 @@ def draw_view_scan():
         viking_color = RED if state["scanning"] else GREEN
         draw_viking_fallback(W - 45, 14, size=3, color=viking_color, frame=state["frame_index"])
     
+    # Mode under sprite
+    draw.text((W - 48, 48), f"Mode:", font=font_tiny, fill=GRAY)
+    draw.text((W - 48, 56), state["scan_profile"][:8], font=font_tiny, fill=CYAN)
+    
     # Network
     draw.text((2, 16), f"Net: {state['network'][:14]}", font=font_tiny, fill=WHITE)
-    draw.text((2, 26), f"Mode: {state['scan_profile']}", font=font_tiny, fill=CYAN)
     
     # Stats
     y = 30
