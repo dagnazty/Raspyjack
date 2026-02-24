@@ -138,7 +138,7 @@ def launch_scan():
         draw.text((2, 50), "Loading Scan...", font=font_small, fill=GREEN)
         LCD.LCD_ShowImage(canvas, 0, 0)
     try:
-        from . import _ragnar as ragnar
+        from . import ragnar
         ragnar.main()
     except Exception as e:
         print(f"[ERROR] Scan module failed: {e}")
@@ -156,7 +156,7 @@ def launch_brute():
         draw.text((2, 50), "Loading Brute...", font=font_small, fill=RED)
         LCD.LCD_ShowImage(canvas, 0, 0)
     try:
-        from . import _ragnar_brute as ragnar_brute
+        from . import ragnar_brute
         ragnar_brute.main()
     except Exception as e:
         print(f"[ERROR] Brute module failed: {e}")
