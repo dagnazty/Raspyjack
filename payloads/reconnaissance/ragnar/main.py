@@ -103,21 +103,26 @@ if HAS_LCD:
         spinner = SPINNER[state["frame"] % 4]
         draw.text((W - 12, 2), spinner, font=font_tiny, fill=BLACK)
         
-        # Menu options
+        # Menu options - show selected one big in middle
         y = 20
-        for i, opt in enumerate(MENU_OPTIONS):
-            prefix = ">" if i == state["menu_index"] else " "
-            color = GREEN if i == state["menu_index"] else GRAY
-            draw.text((10, y), f"{prefix} {opt['name']}", font=font_large, fill=color)
-            y += 16
         
-        # Description
-        y = H - 25
+        # Show current option big in center
         opt = MENU_OPTIONS[state["menu_index"]]
-        draw.text((2, y), opt["desc"], font=font_tiny, fill=WHITE)
+        color = GREEN if opt["module"] in ["scan", "brute"] else YELLOW
+        
+        # Arrow indicators
+        draw.text((2, 45), "<", font=font_large, fill=color)
+        draw.text((W - 10, 45), ">", font=font_large, fill=color)
+        
+        # Selected option name large
+        draw.text((30, 40), opt["name"], font=font_large, fill=color)
+        
+        # Description below
+        y = 70
+        draw.text((10, y), opt["desc"], font=font_tiny, fill=WHITE)
         
         # Controls hint
-        draw.text((2, H - 10), "KEY1:Select  KEY3:Exit", font=font_tiny, fill=GRAY)
+        draw.text((2, H - 10), "< >:Select  KEY1:Run", font=font_tiny, fill=GRAY)
         
         state["frame"] += 1
         LCD.LCD_ShowImage(canvas, 0, 0)
@@ -228,16 +233,16 @@ def main():
             # Exit
             state["running"] = False
         
-        elif button == "UP":
+        elif button == "LEFT":
             # Previous option
             state["menu_index"] = (state["menu_index"] - 1) % len(MENU_OPTIONS)
         
-        elif button == "DOWN":
+        elif button == "RIGHT":
             # Next option
             state["menu_index"] = (state["menu_index"] + 1) % len(MENU_OPTIONS)
         
-        elif button == "KEY1":
-            # Launch selected module
+        elif button == "KEY1" or button == "DOWN":
+            # Launch selected module (KEY1 or DOWN)
             module = MENU_OPTIONS[state["menu_index"]]["module"]
             launcher = MODULE_LAUNCHERS.get(module)
             if launcher:
