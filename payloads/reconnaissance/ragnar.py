@@ -176,12 +176,11 @@ def load_images():
         for img_dir in possible_dirs:
             idle_dir = os.path.join(img_dir, "IDLE")
             if os.path.isdir(idle_dir):
-                for i in range(10):
-                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                        fname = f"IDLE{ext}.bmp" if ext else "IDLE.bmp"
-                        fpath = os.path.join(idle_dir, fname)
-                        if os.path.exists(fpath):
-                            IDLE_FRAMES.append(process_image(fpath))
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"IDLE{ext}.bmp" if ext else "IDLE.bmp"
+                    fpath = os.path.join(idle_dir, fname)
+                    if os.path.exists(fpath):
+                        IDLE_FRAMES.append(process_image(fpath))
                 if IDLE_FRAMES:
                     break
         
@@ -189,12 +188,11 @@ def load_images():
         for img_dir in possible_dirs:
             scan_dir = os.path.join(img_dir, "NetworkScanner")
             if os.path.isdir(scan_dir):
-                for i in range(10):
-                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                        fname = f"NetworkScanner{ext}.bmp" if ext else "NetworkScanner.bmp"
-                        fpath = os.path.join(scan_dir, fname)
-                        if os.path.exists(fpath):
-                            SCAN_FRAMES.append(process_image(fpath))
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"NetworkScanner{ext}.bmp" if ext else "NetworkScanner.bmp"
+                    fpath = os.path.join(scan_dir, fname)
+                    if os.path.exists(fpath):
+                        SCAN_FRAMES.append(process_image(fpath))
                 if SCAN_FRAMES:
                     break
         
@@ -202,12 +200,11 @@ def load_images():
         for img_dir in possible_dirs:
             vuln_dir = os.path.join(img_dir, "NmapVulnScanner")
             if os.path.isdir(vuln_dir):
-                for i in range(10):
-                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                        fname = f"NmapVulnScanner{ext}.bmp" if ext else "NmapVulnScanner.bmp"
-                        fpath = os.path.join(vuln_dir, fname)
-                        if os.path.exists(fpath):
-                            VULN_FRAMES.append(process_image(fpath))
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"NmapVulnScanner{ext}.bmp" if ext else "NmapVulnScanner.bmp"
+                    fpath = os.path.join(vuln_dir, fname)
+                    if os.path.exists(fpath):
+                        VULN_FRAMES.append(process_image(fpath))
                 if VULN_FRAMES:
                     break
         
@@ -215,12 +212,11 @@ def load_images():
         for img_dir in possible_dirs:
             brute_dir = os.path.join(img_dir, "FTPBruteforce")
             if os.path.isdir(brute_dir):
-                for i in range(10):
-                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                        fname = f"FTPBruteforce{ext}.bmp" if ext else "FTPBruteforce.bmp"
-                        fpath = os.path.join(brute_dir, fname)
-                        if os.path.exists(fpath):
-                            BRUTE_FRAMES.append(process_image(fpath))
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"FTPBruteforce{ext}.bmp" if ext else "FTPBruteforce.bmp"
+                    fpath = os.path.join(brute_dir, fname)
+                    if os.path.exists(fpath):
+                        BRUTE_FRAMES.append(process_image(fpath))
                 if BRUTE_FRAMES:
                     break
         
@@ -228,12 +224,11 @@ def load_images():
         for img_dir in possible_dirs:
             steal_dir = os.path.join(img_dir, "StealDataSQL")
             if os.path.isdir(steal_dir):
-                for i in range(10):
-                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
-                        fname = f"StealDataSQL{ext}.bmp" if ext else "StealDataSQL.bmp"
-                        fpath = os.path.join(steal_dir, fname)
-                        if os.path.exists(fpath):
-                            STEAL_FRAMES.append(process_image(fpath))
+                for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                    fname = f"StealDataSQL{ext}.bmp" if ext else "StealDataSQL.bmp"
+                    fpath = os.path.join(steal_dir, fname)
+                    if os.path.exists(fpath):
+                        STEAL_FRAMES.append(process_image(fpath))
                 if STEAL_FRAMES:
                     break
         
