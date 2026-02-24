@@ -122,12 +122,28 @@ PULSE_FRAMES = ["*", "+", "•", "+"]
 
 # Image paths for Ragnar sprites
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
-IDLE_FRAMES = []  # Will be loaded from images
-SCAN_FRAMES = []  # Will be loaded from images
+IDLE_FRAMES = []      # IDLE animation
+SCAN_FRAMES = []      # NetworkScanner animation  
+VULN_FRAMES = []      # NmapVulnScanner animation
+BRUTE_FRAMES = []     # FTPBruteforce animation
+STEAL_FRAMES = []     # StealDataSQL animation
+
+def get_animation_frames():
+    """Return the appropriate animation frames based on current state."""
+    if state.get("attacking"):
+        return BRUTE_FRAMES if BRUTE_FRAMES else IDLE_FRAMES
+    elif state.get("stealing"):
+        return STEAL_FRAMES if STEAL_FRAMES else IDLE_FRAMES
+    elif state.get("scanning_vulns"):
+        return VULN_FRAMES if VULN_FRAMES else SCAN_FRAMES
+    elif state.get("scanning"):
+        return SCAN_FRAMES if SCAN_FRAMES else IDLE_FRAMES
+    else:
+        return IDLE_FRAMES
 
 def load_images():
     """Load Ragnar sprite images if available."""
-    global IDLE_FRAMES, SCAN_FRAMES
+    global IDLE_FRAMES, SCAN_FRAMES, VULN_FRAMES, BRUTE_FRAMES, STEAL_FRAMES
     
     try:
         from PIL import Image
@@ -182,7 +198,46 @@ def load_images():
                 if SCAN_FRAMES:
                     break
         
-        print(f"[INFO] Loaded {len(IDLE_FRAMES)} IDLE frames, {len(SCAN_FRAMES)} SCAN frames")
+        # Load NmapVulnScanner frames
+        for img_dir in possible_dirs:
+            vuln_dir = os.path.join(img_dir, "NmapVulnScanner")
+            if os.path.isdir(vuln_dir):
+                for i in range(10):
+                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                        fname = f"NmapVulnScanner{ext}.bmp" if ext else "NmapVulnScanner.bmp"
+                        fpath = os.path.join(vuln_dir, fname)
+                        if os.path.exists(fpath):
+                            VULN_FRAMES.append(process_image(fpath))
+                if VULN_FRAMES:
+                    break
+        
+        # Load FTPBruteforce frames (for brute force)
+        for img_dir in possible_dirs:
+            brute_dir = os.path.join(img_dir, "FTPBruteforce")
+            if os.path.isdir(brute_dir):
+                for i in range(10):
+                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                        fname = f"FTPBruteforce{ext}.bmp" if ext else "FTPBruteforce.bmp"
+                        fpath = os.path.join(brute_dir, fname)
+                        if os.path.exists(fpath):
+                            BRUTE_FRAMES.append(process_image(fpath))
+                if BRUTE_FRAMES:
+                    break
+        
+        # Load StealDataSQL frames
+        for img_dir in possible_dirs:
+            steal_dir = os.path.join(img_dir, "StealDataSQL")
+            if os.path.isdir(steal_dir):
+                for i in range(10):
+                    for ext in ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                        fname = f"StealDataSQL{ext}.bmp" if ext else "StealDataSQL.bmp"
+                        fpath = os.path.join(steal_dir, fname)
+                        if os.path.exists(fpath):
+                            STEAL_FRAMES.append(process_image(fpath))
+                if STEAL_FRAMES:
+                    break
+        
+        print(f"[INFO] Loaded {len(IDLE_FRAMES)} IDLE, {len(SCAN_FRAMES)} SCAN, {len(VULN_FRAMES)} VULN, {len(BRUTE_FRAMES)} BRUTE, {len(STEAL_FRAMES)} STEAL frames")
     except Exception as e:
         print(f"[WARN] Could not load images: {e}")
 
@@ -217,6 +272,9 @@ def draw_viking_fallback(x, y, size=4, color=GREEN, frame=0):
 # ---------------------------------------------------------------------------
 state = {
     "scanning": False,
+    "scanning_vulns": False,  # Doing vuln scan
+    "attacking": False,        # Brute force attack
+    "stealing": False,        # Data exfiltration
     "auto_scan": False,
     "current_view": 0,
     "scroll_offset": 0,
@@ -538,7 +596,7 @@ def draw_view_scan():
         draw.text((W - 30, 2), "IDLE", font=font_tiny, fill=GREEN)
     
     # Draw Ragnar sprite (use loaded images if available, otherwise fallback)
-    frames = SCAN_FRAMES if state["scanning"] else IDLE_FRAMES
+    frames = get_animation_frames()
     if frames:
         # Use loaded image frames
         frame_idx = state["frame_index"] % len(frames)
