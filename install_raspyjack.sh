@@ -486,29 +486,22 @@ fi
 step "Downloading Ragnar payload sprite images... "
 RAGNAR_IMAGES_DIR="/root/Raspyjack/loot/Ragnar/images"
 if [ -d "$RAGNAR_IMAGES_DIR" ]; then
-    mkdir -p "$RAGNAR_IMAGES_DIR/IDLE" "$RAGNAR_IMAGES_DIR/NetworkScanner"
+    # List of all animation folders
+    ANIMATIONS="IDLE NetworkScanner NmapVulnScanner FTPBruteforce SSHBruteforce SMBBruteforce RDPBruteforce SQLBruteforce StealDataSQL LogStandalone LogStandalone2"
     
-    # Download IDLE frames
-    for i in 0 1 2 3 4; do
-        if [ $i -eq 0 ]; then
-            SUFFIX=""
-        else
-            SUFFIX="$i"
-        fi
-        curl -sL "https://raw.githubusercontent.com/PierreGode/Ragnar/main/resources/images/status/IDLE/IDLE${SUFFIX}.bmp" -o "$RAGNAR_IMAGES_DIR/IDLE/IDLE${SUFFIX}.bmp" || true
+    for ANIM in $ANIMATIONS; do
+        mkdir -p "$RAGNAR_IMAGES_DIR/$ANIM"
+        for i in 0 1 2 3 4 5 6 7 8 9; do
+            if [ $i -eq 0 ]; then
+                SUFFIX=""
+            else
+                SUFFIX="$i"
+            fi
+            curl -sL "https://raw.githubusercontent.com/PierreGode/Ragnar/main/resources/images/status/$ANIM/${ANIM}${SUFFIX}.bmp" -o "$RAGNAR_IMAGES_DIR/$ANIM/${ANIM}${SUFFIX}.bmp" 2>/dev/null || true
+        done
     done
     
-    # Download NetworkScanner frames
-    for i in 0 1 2 3 4; do
-        if [ $i -eq 0 ]; then
-            SUFFIX=""
-        else
-            SUFFIX="$i"
-        fi
-        curl -sL "https://raw.githubusercontent.com/PierreGode/Ragnar/main/resources/images/status/NetworkScanner/NetworkScanner${SUFFIX}.bmp" -o "$RAGNAR_IMAGES_DIR/NetworkScanner/NetworkScanner${SUFFIX}.bmp" || true
-    done
-    
-    info "Downloaded Ragnar sprite images"
+    info "Downloaded all Ragnar sprite images"
 else
     info "Ragnar payload not found, skipping image download"
 fi
