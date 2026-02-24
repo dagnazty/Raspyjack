@@ -2481,6 +2481,7 @@ class DisposableMenu:
             "incident_response",
             "known_unstable",
             "prank",
+            "ragnar",
         ]
 
         def _label(cat: str) -> str:
