@@ -64,7 +64,7 @@ PINS = {
     "OK": 13, "KEY1": 21, "KEY2": 20, "KEY3": 16,
 }
 
-VIEWS = ["SCAN", "HOSTS", "VULNS", "LOOT"]
+VIEWS = ["SCAN", "HOSTS", "VULNS", "LOOT", "PROFILE"]
 
 # Loot directory
 LOOT_DIR = Path("/root/Raspyjack/loot/Ragnar/")
@@ -75,6 +75,37 @@ SCAN_PERIOD = 2 * 60 * 60  # 2 hours for auto-scan
 NMAP_QUICK = ["-T4", "-sn"]  # Ping scan for discovery
 NMAP_PORT = ["-T4", "-sV", "--script=vuln"]  # Port + vuln scan
 NMAP_VULN = ["-T4", "--script=vuln,nmap-vulners"]  # Full vuln scan
+
+# Scan profiles
+SCAN_PROFILES = {
+    "QUICK": {
+        "desc": "Ping scan only",
+        "discovery": ["-T4", "-sn"],
+        "port_scan": ["-T4", "-sT"],
+        "timeout": 60,
+    },
+    "NORMAL": {
+        "desc": "Ports + basic vuln",
+        "discovery": ["-T4", "-sn"],
+        "port_scan": ["-T4", "-sV", "--script=vuln"],
+        "timeout": 120,
+    },
+    "DEEP": {
+        "desc": "Full vuln scan",
+        "discovery": ["-T4", "-sn"],
+        "port_scan": ["-T4", "-sV", "-sC", "--script=vuln,nmap-vulners,vulscan"],
+        "timeout": 300,
+    },
+    "STEALTH": {
+        "desc": "Slow, stealthy scan",
+        "discovery": ["-T1", "-sn"],
+        "port_scan": ["-T1", "-sS", "-sV", "-p-"],
+        "timeout": 600,
+    },
+}
+
+# Default profile
+DEFAULT_PROFILE = "NORMAL"
 
 # Colors
 GREEN = "#00FF00"
@@ -199,6 +230,7 @@ state = {
     "last_scan_time": None,
     "network": "192.168.1.0/24",
     "frame_index": 0,  # For animations
+    "scan_profile": DEFAULT_PROFILE,  # Current scan profile
 }
 
 # ---------------------------------------------------------------------------
@@ -305,11 +337,50 @@ def parse_nmap_ports(output, host_ip):
 def parse_nmap_vulns(output):
     """Parse nmap output for vulnerabilities."""
     vulns = []
+    severity_colors = {
+        "CRITICAL": RED,
+        "HIGH": YELLOW,
+        "MEDIUM": YELLOW,
+        "LOW": CYAN,
+    }
+    
     for line in output.split("\n"):
-        # Look for vuln script output
-        if "vuln" in line.lower() or "CVE-" in line:
-            vulns.append(line.strip())
+        line_lower = line.lower()
+        # Look for vuln script output, CVEs, or severity
+        if any(x in line_lower for x in ["vuln", "cve-", "cve:", "exploit", "attack"]):
+            # Extract severity if present
+            severity = "MEDIUM"
+            for sev in severity_colors:
+                if sev in line.upper():
+                    severity = sev
+            vulns.append({
+                "text": line.strip(),
+                "severity": severity
+            })
     return vulns
+
+def parse_nmap_services(output):
+    """Parse nmap output for detailed service information."""
+    services = []
+    for line in output.split("\n"):
+        # Look for service info lines
+        # Format: 22/tcp   open  ssh     OpenSSH 7.4
+        if "/tcp" in line or "/udp" in line:
+            parts = line.strip().split()
+            if len(parts) >= 4:
+                try:
+                    port_proto = parts[0].split("/")
+                    service = {
+                        "port": port_proto[0],
+                        "proto": port_proto[1] if len(port_proto) > 1 else "tcp",
+                        "state": parts[1],
+                        "service": parts[2],
+                        "version": " ".join(parts[3:]) if len(parts) > 3 else ""
+                    }
+                    services.append(service)
+                except:
+                    pass
+    return services
 
 def save_loot():
     """Save discovered data to loot directory."""
@@ -344,33 +415,53 @@ def save_loot():
 # ---------------------------------------------------------------------------
 # Scanning Functions
 # ---------------------------------------------------------------------------
+def get_profile():
+    """Get current scan profile settings."""
+    return SCAN_PROFILES.get(state["scan_profile"], SCAN_PROFILES["NORMAL"])
+
 def discover_hosts():
     """Discover live hosts on the network."""
-    state["current_target"] = f"Discovering hosts on {state['network']}..."
+    profile = get_profile()
+    state["current_target"] = f"Discovering hosts..."
     
-    output, _ = run_nmap(NMAP_QUICK, state["network"], timeout=60)
+    # Run discovery scan
+    output, err = run_nmap(profile["discovery"], state["network"], timeout=profile["timeout"])
     hosts = parse_nmap_hosts(output)
+    
+    # Also save raw output
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    scan_file = LOOT_DIR / f"scan_discovery_{timestamp}.txt"
+    with open(scan_file, "w") as f:
+        f.write(output)
     
     state["hosts"] = hosts
     return hosts
 
 def scan_host(host_ip):
     """Scan a single host for ports and vulnerabilities."""
+    profile = get_profile()
     state["current_target"] = f"Scanning {host_ip}..."
     
-    # Port scan
-    output, _ = run_nmap(NMAP_PORT, host_ip, timeout=120)
+    # Port + vuln scan with XML output
+    xml_output = f"-oX {LOOT_DIR}/scan_{host_ip.replace('.', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+    cmd_args = profile["port_scan"] + xml_output.split()
+    
+    output, err = run_nmap(cmd_args, host_ip, timeout=profile["timeout"])
     ports = parse_nmap_ports(output, host_ip)
     
-    # Get vulns
+    # Get vulns with more detailed parsing
     vulns = parse_nmap_vulns(output)
+    
+    # Get service versions
+    services = parse_nmap_services(output)
     
     # Update host in state
     for host in state["hosts"]:
         if host["ip"] == host_ip:
             host["ports"] = ports
             host["vulns"] = vulns
-            state["vulns"].extend([f"{host_ip}: {v}" for v in vulns])
+            host["services"] = services
+            state["vulns"].extend([f"{host_ip}:{p['port']}: {v}" for v in vulns for p in ports])
             break
     
     # Add to loot if interesting findings
@@ -379,7 +470,8 @@ def scan_host(host_ip):
             "ip": host_ip,
             "timestamp": datetime.now().isoformat(),
             "ports": ports,
-            "vulns": vulns
+            "vulns": vulns,
+            "services": services
         })
 
 def full_scan():
@@ -461,7 +553,8 @@ def draw_view_scan():
         draw_viking_fallback(W - 45, 14, size=3, color=viking_color, frame=state["frame_index"])
     
     # Network
-    draw.text((2, 16), f"Net: {state['network'][:18]}", font=font_tiny, fill=WHITE)
+    draw.text((2, 16), f"Net: {state['network'][:14]}", font=font_tiny, fill=WHITE)
+    draw.text((2, 26), f"Mode: {state['scan_profile']}", font=font_tiny, fill=CYAN)
     
     # Stats
     y = 30
@@ -574,11 +667,40 @@ def draw_view_loot():
     
     LCD.LCD_ShowImage(canvas, 0, 0)
 
+def draw_view_profile():
+    """Draw the PROFILE view - select scan profile."""
+    draw.rectangle((0, 0, W, H), fill=BLACK)
+    
+    # Status bar
+    draw.rectangle((0, 0, W, 12), fill=CYAN)
+    draw.text((2, 2), "SCAN PROFILE", font=font_tiny, fill=BLACK)
+    
+    # Current profile
+    current = state["scan_profile"]
+    draw.text((2, 16), f"Current: {current}", font=font_small, fill=GREEN)
+    
+    # Show profile descriptions
+    y = 30
+    profile_names = list(SCAN_PROFILES.keys())
+    for i, name in enumerate(profile_names):
+        prefix = ">" if name == current else " "
+        desc = SCAN_PROFILES[name]["desc"]
+        text = f"{prefix} {name}: {desc}"
+        color = GREEN if name == current else GRAY
+        draw.text((2, y), text[:22], font=font_tiny, fill=color)
+        y += 12
+    
+    # Instructions
+    draw.text((2, H - 20), "KEY1: Select", font=font_tiny, fill=GRAY)
+    draw.text((2, H - 10), "LEFT/RIGHT: Cycle", font=font_tiny, fill=GRAY)
+    
+    LCD.LCD_ShowImage(canvas, 0, 0)
+
 def render():
     """Render current view."""
     # Update animation frame on each render
     state["frame_index"] += 1
-    views = [draw_view_scan, draw_view_hosts, draw_view_vulns, draw_view_loot]
+    views = [draw_view_scan, draw_view_hosts, draw_view_vulns, draw_view_loot, draw_view_profile]
     views[state["current_view"]]()
 
 # ---------------------------------------------------------------------------
@@ -643,15 +765,27 @@ def main():
             render()
         
         elif button == "LEFT":
-            # Previous view
-            state["current_view"] = (state["current_view"] - 1) % len(VIEWS)
-            state["scroll_offset"] = 0
+            if state["current_view"] == 4:  # PROFILE view
+                # Cycle through profiles
+                profiles = list(SCAN_PROFILES.keys())
+                current_idx = profiles.index(state["scan_profile"])
+                state["scan_profile"] = profiles[(current_idx - 1) % len(profiles)]
+            else:
+                # Previous view
+                state["current_view"] = (state["current_view"] - 1) % len(VIEWS)
+                state["scroll_offset"] = 0
             render()
         
         elif button == "RIGHT":
-            # Next view
-            state["current_view"] = (state["current_view"] + 1) % len(VIEWS)
-            state["scroll_offset"] = 0
+            if state["current_view"] == 4:  # PROFILE view
+                # Cycle through profiles
+                profiles = list(SCAN_PROFILES.keys())
+                current_idx = profiles.index(state["scan_profile"])
+                state["scan_profile"] = profiles[(current_idx + 1) % len(profiles)]
+            else:
+                # Next view
+                state["current_view"] = (state["current_view"] + 1) % len(VIEWS)
+                state["scroll_offset"] = 0
             render()
         
         elif button == "UP":
