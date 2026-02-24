@@ -765,47 +765,45 @@ def main():
             render()
         
         elif button == "LEFT":
-            if state["current_view"] == 4:  # PROFILE view
-                # Cycle through profiles
+            # Cycle to previous view
+            state["current_view"] = (state["current_view"] - 1) % len(VIEWS)
+            state["scroll_offset"] = 0
+            render()
+        
+        elif button == "RIGHT":
+            # Cycle to next view
+            state["current_view"] = (state["current_view"] + 1) % len(VIEWS)
+            state["scroll_offset"] = 0
+            render()
+        
+        elif button == "UP":
+            if state["current_view"] == 4:  # PROFILE view - select previous
                 profiles = list(SCAN_PROFILES.keys())
                 current_idx = profiles.index(state["scan_profile"])
                 state["scan_profile"] = profiles[(current_idx - 1) % len(profiles)]
             else:
-                # Previous view
-                state["current_view"] = (state["current_view"] - 1) % len(VIEWS)
-                state["scroll_offset"] = 0
+                # Scroll up lists
+                if state["scroll_offset"] > 0:
+                    state["scroll_offset"] -= 1
             render()
         
-        elif button == "RIGHT":
-            if state["current_view"] == 4:  # PROFILE view
-                # Cycle through profiles
+        elif button == "DOWN":
+            if state["current_view"] == 4:  # PROFILE view - select next
                 profiles = list(SCAN_PROFILES.keys())
                 current_idx = profiles.index(state["scan_profile"])
                 state["scan_profile"] = profiles[(current_idx + 1) % len(profiles)]
             else:
-                # Next view
-                state["current_view"] = (state["current_view"] + 1) % len(VIEWS)
-                state["scroll_offset"] = 0
-            render()
-        
-        elif button == "UP":
-            # Scroll up
-            if state["scroll_offset"] > 0:
-                state["scroll_offset"] -= 1
-            render()
-        
-        elif button == "DOWN":
-            # Scroll down
-            max_items = 8
-            if state["current_view"] == 1:  # HOSTS
-                max_items = len(state["hosts"]) - 8
-            elif state["current_view"] == 2:  # VULNS
-                max_items = len(state["vulns"]) - 8
-            elif state["current_view"] == 3:  # LOOT
-                max_items = len(state["loot"]) - 8
-            
-            if state["scroll_offset"] < max_items:
-                state["scroll_offset"] += 1
+                # Scroll down lists
+                max_items = 8
+                if state["current_view"] == 1:  # HOSTS
+                    max_items = max(0, len(state["hosts"]) - 8)
+                elif state["current_view"] == 2:  # VULNS
+                    max_items = max(0, len(state["vulns"]) - 8)
+                elif state["current_view"] == 3:  # LOOT
+                    max_items = max(0, len(state["loot"]) - 8)
+                
+                if state["scroll_offset"] < max_items:
+                    state["scroll_offset"] += 1
             render()
     
     # Cleanup
