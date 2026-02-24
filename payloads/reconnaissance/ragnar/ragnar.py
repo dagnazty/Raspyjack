@@ -38,6 +38,11 @@ import ipaddress
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Custom exception for exiting back to menu
+class ExitToMenu(Exception):
+    """Raised when user wants to exit back to Ragnar main menu."""
+    pass
+
 # Try multiple possible RaspyJack installation paths
 possible_roots = [
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),  # Standard: ~/Raspyjack
@@ -804,8 +809,8 @@ def main():
         time.sleep(0.1)  # Extra debounce delay
         
         if button == "KEY3":
-            # Exit
-            break
+            # Exit back to menu
+            raise ExitToMenu("Returning to menu")
         
         elif button == "KEY1":
             # Toggle scan
@@ -871,7 +876,10 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         pass
+    except ExitToMenu:
+        print("[INFO] Returning to Ragnar menu...")
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        GPIO.cleanup()
+        if HAS_LCD:
+            GPIO.cleanup()

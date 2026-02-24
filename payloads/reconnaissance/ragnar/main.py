@@ -22,6 +22,26 @@ for root in possible_roots:
     if root not in sys.path and os.path.isdir(root):
         sys.path.insert(0, root)
 
+# Custom exception for exiting back to menu
+class ExitToMenu(Exception):
+    """Raised when user wants to exit back to Ragnar main menu."""
+    pass
+
+# Handle imports for both package and script mode
+try:
+    from . import ragnar
+    from . import ragnar_brute
+except ImportError:
+    # When run as script, use absolute imports
+    import importlib.util
+    ragnar_dir = os.path.dirname(__file__)
+    spec = importlib.util.spec_from_file_location("ragnar", os.path.join(ragnar_dir, "ragnar.py"))
+    ragnar = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ragnar)
+    spec = importlib.util.spec_from_file_location("ragnar_brute", os.path.join(ragnar_dir, "ragnar_brute.py"))
+    ragnar_brute = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ragnar_brute)
+
 try:
     import RPi.GPIO as GPIO
     import LCD_1in44, LCD_Config
@@ -122,7 +142,7 @@ if HAS_LCD:
         draw.text((10, y), opt["desc"], font=font_tiny, fill=WHITE)
         
         # Controls hint
-        draw.text((2, H - 10), "< >:Select  KEY1:Run", font=font_tiny, fill=GRAY)
+        draw.text((2, H - 10), "UP/DOWN:Select OK:Run", font=font_tiny, fill=GRAY)
         
         state["frame"] += 1
         LCD.LCD_ShowImage(canvas, 0, 0)
@@ -138,7 +158,6 @@ def launch_scan():
         draw.text((2, 50), "Loading Scan...", font=font_small, fill=GREEN)
         LCD.LCD_ShowImage(canvas, 0, 0)
     try:
-        from . import ragnar
         ragnar.main()
     except Exception as e:
         print(f"[ERROR] Scan module failed: {e}")
@@ -156,7 +175,6 @@ def launch_brute():
         draw.text((2, 50), "Loading Brute...", font=font_small, fill=RED)
         LCD.LCD_ShowImage(canvas, 0, 0)
     try:
-        from . import ragnar_brute
         ragnar_brute.main()
     except Exception as e:
         print(f"[ERROR] Brute module failed: {e}")
@@ -215,43 +233,46 @@ def main():
     draw_menu()
     
     while state["running"]:
+        # Poll buttons - don't block on get_button
         button = get_button(PINS, GPIO)
         
-        # Re-render for animation
-        draw_menu()
-        time.sleep(0.3)
+        if button is not None:
+            # Wait for button release
+            while get_button(PINS, GPIO) is not None:
+                time.sleep(0.05)
+            time.sleep(0.1)  # Debounce
+            
+            if button == "KEY3":
+                # Exit
+                state["running"] = False
+            
+            elif button == "UP" or button == "LEFT":
+                # Previous option
+                state["menu_index"] = (state["menu_index"] - 1) % len(MENU_OPTIONS)
+                draw_menu()
+            
+            elif button == "DOWN" or button == "RIGHT":
+                # Next option
+                state["menu_index"] = (state["menu_index"] + 1) % len(MENU_OPTIONS)
+                draw_menu()
+            
+            elif button == "OK" or button == "KEY1":
+                # Launch selected module
+                module = MENU_OPTIONS[state["menu_index"]]["module"]
+                launcher = MODULE_LAUNCHERS.get(module)
+                if launcher:
+                    try:
+                        launcher()
+                    except ExitToMenu:
+                        pass
+                draw_menu()
         
-        if button is None:
-            continue
-        
-        # Wait for button release
-        while get_button(PINS, GPIO) is not None:
-            time.sleep(0.05)
+        # Slow down the loop a bit for animation
         time.sleep(0.1)
-        
-        if button == "KEY3":
-            # Exit
-            state["running"] = False
-        
-        elif button == "LEFT":
-            # Previous option
-            state["menu_index"] = (state["menu_index"] - 1) % len(MENU_OPTIONS)
-        
-        elif button == "RIGHT":
-            # Next option
-            state["menu_index"] = (state["menu_index"] + 1) % len(MENU_OPTIONS)
-        
-        elif button == "KEY1" or button == "DOWN":
-            # Launch selected module (KEY1 or DOWN)
-            module = MENU_OPTIONS[state["menu_index"]]["module"]
-            launcher = MODULE_LAUNCHERS.get(module)
-            if launcher:
-                launcher()
-            # Redraw menu after module exits
-            draw_menu()
     
     # Cleanup
-    GPIO.cleanup()
+    if HAS_LCD:
+        GPIO.cleanup()
 
 if __name__ == "__main__":
     main()
