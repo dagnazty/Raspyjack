@@ -2898,9 +2898,15 @@ def main():
             else:
                 m.menu[m.which][m.select][1]()
         elif len(m.which) > 1:
-            # Handle dynamic payload category menus (ap_<category>)
+            # Handle dynamic payload category menus (ap_<category>_<subcategory>)
             if m.which.startswith("ap_"):
-                m.which = "ap"
+                parts = m.which.split('_')
+                if len(parts) > 2:
+                    # Has subcategory: ap_reconnaissance_ragnar -> ap_reconnaissance
+                    m.which = '_'.join(parts[:2])
+                else:
+                    # Just category: ap_reconnaissance -> ap
+                    m.which = "ap"
             else:
                 m.which = m.which[:-1]
 
