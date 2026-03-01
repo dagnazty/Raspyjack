@@ -2274,7 +2274,7 @@ def _setup_gpio() -> None:
 # ---------------------------------------------------------------------------
 # 2)  exec_payload – run a script then *immediately* restore RaspyJack UI
 # ---------------------------------------------------------------------------
-def exec_payload(filename: str) -> None:
+def exec_payload(filename: str, *args) -> None:
     """
     Execute a Python script located in « payloads/ » and *always*
     return control – screen **and** buttons – to RaspyJack.
@@ -2285,6 +2285,14 @@ def exec_payload(filename: str) -> None:
     2. Run the payload **blocking** in the foreground.
     3. Whatever happens, re-initialise GPIO + LCD and redraw the menu.
     """
+    # Support passing (filename, arg1, arg2) as tuple for dynamic menus
+    if isinstance(filename, (list, tuple)):
+        if len(filename) >= 2:
+            args = filename[1:] + args
+            filename = filename[0]
+        else:
+            filename = filename[0]
+
     full = os.path.join(default.payload_path, filename)
     # Ensure .py extension
     if not full.endswith(".py"):
@@ -2303,8 +2311,11 @@ def exec_payload(filename: str) -> None:
         # Ensure payloads can import RaspyJack modules reliably
         env = os.environ.copy()
         env["PYTHONPATH"] = default.install_path + os.pathsep + env.get("PYTHONPATH", "")
+        cmd = ["python3", full]
+        if args:
+            cmd.extend(args)
         result = subprocess.run(
-            ["python3", full],
+            cmd,
             cwd=default.install_path,  # same PYTHONPATH as RaspyJack
             env=env,
             stdout=log,
@@ -2441,6 +2452,7 @@ class DisposableMenu:
         ),
 
         "aw": (
+            [" Full WiFi Manager", partial(exec_payload, "general/wifi_manager_payload")],
             [" FAST WiFi Switcher", launch_wifi_manager],
             [" INSTANT Toggle 0↔1", quick_wifi_toggle],
             [" Switch Interface", switch_interface_menu],
